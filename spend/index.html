@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Spend">
+<meta name="theme-color" content="#0d0d0e">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<link rel="manifest" href="manifest.json">
+<title>Spend</title>
+<style>
+  :root{
+    --bg:#0d0d0e; --card:#18181b; --line:#26262a; --text:#f4f4f5; --dim:#8b8b93;
+    --accent:#d4ff3a; --warn:#ff5a4e;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+    width:100%;height:100%;overflow:hidden;-webkit-text-size-adjust:100%}
+  #app{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
+  .wrap{max-width:480px;width:100%;margin:0 auto;padding:calc(env(safe-area-inset-top) + 18px) 18px 110px}
+  header{display:flex;justify-content:space-between;align-items:center}
+  .brand{font-weight:800;letter-spacing:.18em;font-size:13px}
+  .icon-btn{background:var(--card);border:1px solid var(--line);color:var(--text);
+    width:38px;height:38px;border-radius:12px;font-size:17px;cursor:pointer}
+  .icon-btn.spin{animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .tabs{display:flex;gap:6px;background:var(--card);padding:4px;border-radius:14px;margin:18px 0 22px}
+  .tabs button{flex:1;border:0;background:transparent;color:var(--dim);padding:9px 0;border-radius:10px;
+    font-size:14px;font-weight:600;cursor:pointer}
+  .tabs button.on{background:var(--text);color:var(--bg)}
+  .label{color:var(--dim);font-size:13px;font-weight:500}
+  .total{font-size:54px;font-weight:800;letter-spacing:-.03em;margin:4px 0 2px;line-height:1.05}
+  .total small{font-size:28px;font-weight:700;color:var(--dim);margin-left:4px}
+  .sub{color:var(--dim);font-size:14px;min-height:20px}
+  .bar{height:8px;background:var(--line);border-radius:9px;overflow:hidden;margin:12px 0 4px}
+  .bar i{display:block;height:100%;background:var(--accent);border-radius:9px;transition:width .4s}
+  .bar.over i{background:var(--warn)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-top:18px}
+  .card h3{margin:0 0 12px;font-size:13px;color:var(--dim);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+  .cat{display:grid;grid-template-columns:12px 1fr auto;gap:10px;align-items:center;margin:10px 0}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .cat .name{font-size:15px}
+  .cat .val{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+  .cat .track{grid-column:2/4;height:5px;background:var(--line);border-radius:5px;margin-top:-4px;overflow:hidden}
+  .cat .track i{display:block;height:100%;border-radius:5px}
+  .day{color:var(--dim);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin:16px 0 4px}
+  .tx{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);cursor:pointer}
+  .tx:last-child{border-bottom:0}
+  .tx .badge{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-weight:800;font-size:14px;color:#0d0d0e;flex:none}
+  .tx .mid{flex:1;min-width:0}
+  .tx .m{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tx .c{font-size:12.5px;color:var(--dim);margin-top:2px}
+  .tx .a{font-weight:700;font-variant-numeric:tabular-nums;font-size:15px}
+  .empty{color:var(--dim);text-align:center;padding:26px 0;font-size:14px}
+  .fab{position:fixed;right:20px;bottom:calc(env(safe-area-inset-bottom) + 22px);width:58px;height:58px;border-radius:20px;
+    background:var(--accent);color:#0d0d0e;border:0;font-size:30px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.5);cursor:pointer}
+  .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;z-index:10}
+  .sheet-bg.show{display:flex}
+  .sheet{background:var(--card);width:100%;max-width:480px;margin:0 auto;border-radius:22px 22px 0 0;
+    padding:20px 18px calc(env(safe-area-inset-bottom) + 20px);border-top:1px solid var(--line)}
+  .sheet h2{margin:0 0 4px;font-size:19px}
+  .sheet p{margin:0 0 14px;color:var(--dim);font-size:14px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+  .chip{border:1px solid var(--line);background:var(--bg);color:var(--text);padding:9px 13px;border-radius:12px;font-size:14px;cursor:pointer}
+  .chip.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+  input[type=text],input[type=number],input[type=url]{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);
+    padding:14px;border-radius:12px;font-size:17px;margin:6px 0;outline:none}
+  .row{display:flex;gap:10px;margin-top:14px}
+  .btn{flex:1;border:0;padding:15px;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer}
+  .btn.main{background:var(--accent);color:#0d0d0e}
+  .btn.ghost{background:var(--bg);color:var(--text);border:1px solid var(--line)}
+  .btn.del{background:transparent;color:var(--warn);border:1px solid #3a2020}
+  .btn:disabled{opacity:.5}
+  .link-btn{background:none;border:0;color:var(--dim);font-size:14px;text-decoration:underline;padding:14px 0 0;cursor:pointer}
+  label.chk{display:flex;gap:8px;align-items:center;color:var(--dim);font-size:14px;margin-top:4px}
+  .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 12px);transform:translateX(-50%);background:var(--text);color:var(--bg);
+    padding:9px 14px;border-radius:12px;font-size:14px;font-weight:600;display:none;z-index:30;max-width:90%;text-align:center}
+  .toast.bad{background:var(--warn);color:#fff}
+  .demo{background:#2a2a10;color:var(--accent);font-size:12px;padding:6px 10px;border-radius:8px;display:inline-block;margin-top:8px}
+  /* first-time setup */
+  .setup{position:fixed;inset:0;background:var(--bg);z-index:20;display:none;overflow-y:auto}
+  .setup.show{display:block}
+  .setup-in{max-width:480px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 60px) 22px 40px}
+  .setup h2{font-size:28px;margin:28px 0 8px;letter-spacing:-.02em}
+  .setup p{color:var(--dim);font-size:15px;line-height:1.45;margin:0 0 18px}
+  .setup .btn{width:100%;margin-top:10px}
+  .err{color:var(--warn);font-size:14px;margin-top:12px;min-height:20px}
+</style>
+</head>
+<body>
+<div id="app">
+<div class="wrap">
+  <header>
+    <div class="brand">SPEND</div>
+    <div>
+      <button class="icon-btn" id="refreshBtn" onclick="load()" aria-label="Refresh">↻</button>
+      <button class="icon-btn" onclick="openSettings()" aria-label="Settings">⚙︎</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button data-p="day" class="on">Today</button>
+    <button data-p="week">Week</button>
+    <button data-p="month">Month</button>
+  </div>
+
+  <div class="label" id="periodLabel">Spent today</div>
+  <div class="total" id="total">0.00<small>₾</small></div>
+  <div id="limitBox" style="display:none"><div class="bar" id="bar"><i id="barFill" style="width:0"></i></div></div>
+  <div class="sub" id="sub">Loading…</div>
+  <div id="demoTag"></div>
+
+  <div class="card"><h3>By category</h3><div id="cats"></div></div>
+  <div class="card" id="topCard" style="display:none"><h3>Top shops</h3><div id="tops"></div></div>
+  <div class="card"><h3>Purchases</h3><div id="list"></div></div>
+</div>
+</div>
+
+<button class="fab" onclick="openAdd()" aria-label="Add expense">+</button>
+<div class="toast" id="toast"></div>
+
+<!-- first-time setup -->
+<div class="setup" id="setup">
+  <div class="setup-in">
+    <div class="brand">SPEND</div>
+    <h2>Connect your sheet</h2>
+    <p>Paste your Google Script link: the one ending in <b>/exec?key=</b> and your secret word. You only do this once.</p>
+    <input type="url" id="linkIn" placeholder="https://script.google.com/macros/s/…/exec?key=…" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <button class="btn main" id="linkBtn" onclick="saveLink()">Connect</button>
+    <div class="err" id="linkErr"></div>
+  </div>
+</div>
+
+<!-- edit purchase -->
+<div class="sheet-bg" id="editBg" onclick="if(event.target===this)closeAll()">
+  <div class="sheet">
+    <h2 id="editTitle">Shop</h2>
+    <p id="editSub"></p>
+    <div class="chips" id="editChips"></div>
+    <label class="chk"><input type="checkbox" id="remember" checked> Always use this for this shop</label>
+    <div class="row">
+      <button class="btn del" onclick="doDelete()">Delete</button>
+      <button class="btn main" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- add cash -->
+<div class="sheet-bg" id="addBg" onclick="if(event.target===this)closeAll()">
+  <div class="sheet">
+    <h2>Add expense</h2>
+    <p>For cash or anything without an SMS</p>
+    <input type="text" id="addAmount" inputmode="decimal" placeholder="Amount ₾">
+    <input type="text" id="addName" placeholder="What / where (optional)">
+    <div class="chips" id="addChips"></div>
+    <div class="row">
+      <button class="btn ghost" onclick="closeAll()">Cancel</button>
+      <button class="btn main" onclick="saveAdd()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- settings -->
+<div class="sheet-bg" id="setBg" onclick="if(event.target===this)closeAll()">
+  <div class="sheet">
+    <h2>Daily limit</h2>
+    <p>Bar turns red when today goes over. 0 = no limit.</p>
+    <input type="number" id="limitIn" inputmode="decimal" placeholder="e.g. 60">
+    <div class="row">
+      <button class="btn ghost" onclick="closeAll()">Cancel</button>
+      <button class="btn main" onclick="saveLimit()">Save</button>
+    </div>
+    <button class="link-btn" onclick="closeAll();showSetup(true)">Change sheet link</button>
+  </div>
+</div>
+
+<script>
+const COLORS = {
+  'Food & drinks':'#ff8a3d','Groceries':'#5ad17a','Transport':'#4fa3ff','Shopping':'#c77dff','Bills':'#ffd23f',
+  'Subscriptions':'#ff5fa2','Health':'#3fe0d0','Fun':'#ff6b6b','Transfers':'#a0a0a8','Other':'#6b6b73'
+};
+let DATA = {tx:[], categories:Object.keys(COLORS), limit:0};
+let period = 'day', editing = null, pickEdit = null, pickAdd = 'Other';
+
+/* ---- connection to your Google Script ---- */
+const LS_KEY = 'spend_link';
+const DEMO_MODE = location.hash === '#demo';
+let API = '';
+try { API = localStorage.getItem(LS_KEY) || ''; } catch (e) {}
+
+function apiGet(link){
+  const url = link + (link.indexOf('?') === -1 ? '?' : '&') + 'api=1&t=' + Date.now();
+  return fetch(url, {cache:'no-store'}).then(r => r.json()).then(d => { if (d && d.error) throw new Error(d.error); return d; });
+}
+function call(fn, ...args){
+  if (DEMO_MODE) return Promise.resolve(demo(fn, ...args));
+  if (!API) return Promise.reject(new Error('Not connected'));
+  if (fn === 'getData') return apiGet(API);
+  // text/plain POST = no CORS preflight; Apps Script answers with JSON
+  return fetch(API, {method:'POST', body: JSON.stringify({action: fn, args: args})})
+    .then(r => r.json()).then(d => { if (d && d.error) throw new Error(d.error); return d; });
+}
+function friendly(e){
+  const m = String((e && e.message) || e);
+  if (/not allowed/i.test(m)) return 'Secret word does not match';
+  if (/load failed|failed to fetch|network/i.test(m)) return 'No connection. Check your internet';
+  if (/json|unexpected/i.test(m)) return 'Script not updated yet. Redeploy as New version';
+  return m;
+}
+
+let busy = 0;
+function setBusy(on){ busy += on ? 1 : -1; document.getElementById('refreshBtn').classList.toggle('spin', busy > 0); }
+function act(p, okMsg){
+  setBusy(true);
+  return p.then(d => { DATA = d; render(); closeAll(); if (okMsg) toast(okMsg); })
+    .catch(e => toast(friendly(e), true))
+    .finally(() => setBusy(false));
+}
+function load(){
+  if (!API && !DEMO_MODE) { showSetup(); return; }
+  setBusy(true);
+  call('getData').then(d => { DATA = d; render(); })
+    .catch(e => { toast(friendly(e), true); document.getElementById('sub').textContent = ''; })
+    .finally(() => setBusy(false));
+}
+
+/* ---- setup screen ---- */
+function showSetup(edit){
+  document.getElementById('linkIn').value = edit ? API : '';
+  document.getElementById('linkErr').textContent = '';
+  document.getElementById('setup').classList.add('show');
+}
+function saveLink(){
+  const raw = document.getElementById('linkIn').value.trim().replace(/\s+/g, '');
+  const err = document.getElementById('linkErr'), btn = document.getElementById('linkBtn');
+  if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(raw) || raw.indexOf('/exec') === -1) { err.textContent = 'That doesn\'t look like your script link. It starts with https://script.google.com and has /exec'; return; }
+  if (raw.indexOf('key=') === -1) { err.textContent = 'Add ?key= and your secret word to the end of the link'; return; }
+  err.textContent = ''; btn.disabled = true; btn.textContent = 'Connecting…';
+  apiGet(raw).then(d => {
+    API = raw; try { localStorage.setItem(LS_KEY, raw); } catch (e) {}
+    DATA = d; render();
+    document.getElementById('setup').classList.remove('show');
+    toast('Connected ✓');
+  }).catch(e => { err.textContent = friendly(e); })
+    .finally(() => { btn.disabled = false; btn.textContent = 'Connect'; });
+}
+
+/* ---- helpers ---- */
+const fmt = n => n.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const color = c => COLORS[c] || '#6b6b73';
+function startOf(p){
+  const d = new Date(); d.setHours(0,0,0,0);
+  if (p==='week'){ const wd = (d.getDay()+6)%7; d.setDate(d.getDate()-wd); }
+  if (p==='month'){ d.setDate(1); }
+  return d.getTime();
+}
+function dayLabel(ts){
+  const d = new Date(ts), t = new Date(); t.setHours(0,0,0,0);
+  const diff = Math.round((t - new Date(d).setHours(0,0,0,0))/864e5);
+  if (diff===0) return 'Today';
+  if (diff===1) return 'Yesterday';
+  return d.toLocaleDateString('en-GB',{weekday:'short', day:'numeric', month:'short'});
+}
+const timeOf = ts => new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+const curSym = c => c==='GEL' ? '₾' : c==='USD' ? '$' : c==='EUR' ? '€' : c;
+
+/* ---- render ---- */
+function render(){
+  const from = startOf(period);
+  const items = (DATA.tx || []).filter(t => t.ts >= from).sort((a,b) => b.ts - a.ts);
+  const gel = items.filter(t => t.currency==='GEL');
+  const total = gel.reduce((s,t) => s + t.amount, 0);
+  const foreign = items.filter(t => t.currency!=='GEL');
+
+  document.getElementById('periodLabel').textContent =
+    period==='day' ? 'Spent today' : period==='week' ? 'Spent this week' : 'Spent this month';
+  document.getElementById('total').innerHTML = fmt(total) + '<small>₾</small>';
+
+  const lb = document.getElementById('limitBox'), sub = document.getElementById('sub');
+  let subTxt = '';
+  if (period==='day' && DATA.limit > 0){
+    lb.style.display = '';
+    const pct = Math.min(100, total / DATA.limit * 100);
+    document.getElementById('barFill').style.width = pct + '%';
+    document.getElementById('bar').classList.toggle('over', total > DATA.limit);
+    const left = DATA.limit - total;
+    subTxt = left >= 0 ? fmt(left) + ' ₾ left of ' + fmt(DATA.limit) + ' ₾' : fmt(-left) + ' ₾ over your ' + fmt(DATA.limit) + ' ₾ limit';
+  } else {
+    lb.style.display = 'none';
+    if (period!=='day'){
+      const days = Math.max(1, Math.ceil((Date.now() - from) / 864e5));
+      subTxt = 'About ' + fmt(total/days) + ' ₾ a day · ' + items.length + ' purchases';
+    } else subTxt = items.length ? items.length + ' purchase' + (items.length>1?'s':'') : '';
+  }
+  if (foreign.length){
+    const byCur = {};
+    foreign.forEach(t => byCur[t.currency] = (byCur[t.currency]||0) + t.amount);
+    subTxt += (subTxt?' · ':'') + '+ ' + Object.entries(byCur).map(([c,v]) => curSym(c)+fmt(v)).join(', ');
+  }
+  sub.textContent = subTxt;
+  document.getElementById('demoTag').innerHTML = DEMO_MODE ? '<span class="demo">Demo data. Preview only</span>' : '';
+
+  const byCat = {};
+  gel.forEach(t => byCat[t.category] = (byCat[t.category]||0) + t.amount);
+  const cats = Object.entries(byCat).sort((a,b) => b[1]-a[1]);
+  const max = cats.length ? cats[0][1] : 1;
+  document.getElementById('cats').innerHTML = cats.length ? cats.map(([c,v]) => `
+    <div class="cat"><span class="dot" style="background:${color(c)}"></span>
+      <span class="name">${esc(c)}</span><span class="val">${fmt(v)} ₾</span>
+      <span class="track"><i style="width:${v/max*100}%;background:${color(c)}"></i></span></div>`).join('')
+    : '<div class="empty">Nothing spent yet 👌</div>';
+
+  const topCard = document.getElementById('topCard');
+  if (period!=='day' && gel.length){
+    const byM = {};
+    gel.forEach(t => { const k = t.merchant; byM[k] = byM[k] || {v:0,n:0,c:t.category}; byM[k].v += t.amount; byM[k].n++; });
+    const tops = Object.entries(byM).sort((a,b) => b[1].v - a[1].v).slice(0,3);
+    topCard.style.display = '';
+    document.getElementById('tops').innerHTML = tops.map(([m,o]) => `
+      <div class="tx" style="cursor:default"><div class="badge" style="background:${color(o.c)}">${esc(m.charAt(0).toUpperCase())}</div>
+      <div class="mid"><div class="m">${esc(m)}</div><div class="c">${o.n} time${o.n>1?'s':''}</div></div>
+      <div class="a">${fmt(o.v)} ₾</div></div>`).join('');
+  } else topCard.style.display = 'none';
+
+  let html = '', lastDay = '';
+  items.forEach(t => {
+    const dl = dayLabel(t.ts);
+    if (period!=='day' && dl !== lastDay){ html += `<div class="day">${dl}</div>`; lastDay = dl; }
+    html += `<div class="tx" data-id="${esc(t.id)}">
+      <div class="badge" style="background:${color(t.category)}">${esc(t.merchant.charAt(0).toUpperCase())}</div>
+      <div class="mid"><div class="m">${esc(t.merchant)}</div><div class="c">${esc(t.category)} · ${timeOf(t.ts)}</div></div>
+      <div class="a">${fmt(t.amount)} ${curSym(t.currency)}</div></div>`;
+  });
+  const list = document.getElementById('list');
+  list.innerHTML = html || '<div class="empty">No purchases yet</div>';
+  list.querySelectorAll('.tx[data-id]').forEach(el => el.onclick = () => openEdit(el.dataset.id));
+}
+
+/* ---- tabs ---- */
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); period = b.dataset.p; render();
+});
+
+/* ---- sheets ---- */
+function chips(el, selected, onPick){
+  el.innerHTML = (DATA.categories || Object.keys(COLORS)).map(c =>
+    `<button class="chip ${c===selected?'on':''}" data-c="${esc(c)}"><span class="dot" style="display:inline-block;background:${color(c)};margin-right:6px"></span>${esc(c)}</button>`).join('');
+  el.querySelectorAll('.chip').forEach(b => b.onclick = () => {
+    el.querySelectorAll('.chip').forEach(x => x.classList.remove('on')); b.classList.add('on'); onPick(b.dataset.c);
+  });
+}
+function openEdit(id){
+  editing = DATA.tx.find(t => t.id===id); if (!editing) return;
+  pickEdit = editing.category;
+  document.getElementById('editTitle').textContent = editing.merchant;
+  document.getElementById('editSub').textContent = fmt(editing.amount) + ' ' + curSym(editing.currency) + ' · ' + dayLabel(editing.ts) + ', ' + timeOf(editing.ts);
+  chips(document.getElementById('editChips'), pickEdit, c => pickEdit = c);
+  document.getElementById('editBg').classList.add('show');
+}
+function saveEdit(){
+  const rem = document.getElementById('remember').checked;
+  act(call('setCategory', editing.id, pickEdit, rem), rem ? 'Saved. Will remember this shop' : 'Saved');
+}
+function doDelete(){ act(call('deleteTx', editing.id), 'Deleted'); }
+function openAdd(){
+  pickAdd = 'Other';
+  document.getElementById('addAmount').value = ''; document.getElementById('addName').value = '';
+  chips(document.getElementById('addChips'), pickAdd, c => pickAdd = c);
+  document.getElementById('addBg').classList.add('show');
+  setTimeout(() => document.getElementById('addAmount').focus(), 50);
+}
+function saveAdd(){
+  const a = document.getElementById('addAmount').value.trim();
+  if (!(parseFloat(a.replace(',','.')) > 0)) return toast('Enter an amount', true);
+  act(call('addTx', a, document.getElementById('addName').value.trim() || 'Cash', pickAdd), 'Added');
+}
+function openSettings(){
+  document.getElementById('limitIn').value = DATA.limit || '';
+  document.getElementById('setBg').classList.add('show');
+}
+function saveLimit(){ act(call('setLimit', parseFloat(document.getElementById('limitIn').value) || 0), 'Limit saved'); }
+function closeAll(){ document.querySelectorAll('.sheet-bg').forEach(s => s.classList.remove('show')); }
+function toast(m, bad){
+  const t = document.getElementById('toast'); t.textContent = m; t.classList.toggle('bad', !!bad); t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', bad ? 4000 : 2200);
+}
+
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && (API || DEMO_MODE)) load(); });
+
+/* ---- demo (open the page with #demo at the end) ---- */
+let DEMO = null;
+function demo(fn, ...a){
+  if (!DEMO){
+    const now = Date.now(), H = 36e5, D = 864e5;
+    const s = [[0.5,24.5,'WOLT','Food & drinks'],[2,5.5,'YANDEX GO','Transport'],[4,7.43,'FRESCO','Groceries'],
+      [D/H+3,15.55,"McDonald's",'Food & drinks'],[D/H+6,89,'ZARA','Shopping'],[2*D/H+1,32.4,'NIKORA','Groceries'],
+      [2*D/H+5,9.99,'SPOTIFY','Subscriptions'],[3*D/H+2,7.8,'BOLT','Transport'],[4*D/H,45,'MAGTI','Bills']];
+    DEMO = {tx: s.map((x,i) => ({id:'d'+i, ts: now - x[0]*H, amount:x[1], currency:'GEL', merchant:x[2], category:x[3]})),
+      categories:Object.keys(COLORS), limit:60};
+  }
+  if (fn==='setCategory'){ const t = DEMO.tx.find(x => x.id===a[0]); if (t){ if (a[2]) DEMO.tx.forEach(x => { if (x.merchant===t.merchant) x.category = a[1]; }); else t.category = a[1]; } }
+  if (fn==='deleteTx') DEMO.tx = DEMO.tx.filter(x => x.id!==a[0]);
+  if (fn==='addTx') DEMO.tx.push({id:'d'+Math.random(), ts:Date.now(), amount:parseFloat(String(a[0]).replace(',','.')), currency:'GEL', merchant:a[1], category:a[2]});
+  if (fn==='setLimit') DEMO.limit = a[0];
+  return JSON.parse(JSON.stringify(DEMO));
+}
+
+load();
+</script>
+</body>
+</html>

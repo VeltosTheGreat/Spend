@@ -103,6 +103,12 @@
   .xrow .s{font-size:12.5px;color:var(--dim);margin-top:2px}
   .xrow .v{font-weight:700;font-variant-numeric:tabular-nums;font-size:15px;white-space:nowrap}
   #resetBtn{display:block;margin:18px auto 0}
+  .xadd{width:100%;margin-top:18px}
+  .xhint{color:var(--dim);font-size:13.5px;line-height:1.45;margin:10px 4px 0;text-align:center}
+  .xhow{margin:0;padding-left:18px;color:var(--dim);font-size:14px;line-height:1.5}
+  .xhow li{margin:6px 0}
+  .xhow b{color:var(--text);font-weight:600}
+  .xrow.add{cursor:pointer}
 </style>
 </head>
 <body>
@@ -140,8 +146,18 @@
     <div class="label">Extra balance</div>
     <div class="total" id="extraTotal">0.00<small>₾</small></div>
     <div class="sub" id="extraSub"></div>
+    <button class="btn ghost xadd" onclick="openAddExtra()">＋ Add money to Extra</button>
+    <div class="xhint">Sold something, got a gift or earned on the side? Add it here and it goes straight into your Extra.</div>
     <div class="card"><h3>Today so far</h3><div id="extraToday"></div></div>
     <div class="card"><h3>Day by day</h3><div id="extraList"></div></div>
+    <div class="card"><h3>How Extra works</h3>
+      <ul class="xhow">
+        <li>Every day, what's left of your <b>daily limit</b> goes into Extra.</li>
+        <li>Spend more than your limit and the difference <b>comes off</b>. Extra can go below 0.</li>
+        <li>Money you add with <b>＋ Add money to Extra</b> counts straight away. Tap it in the list to remove it.</li>
+        <li>Delete a purchase or mark it <b>Not spending</b>, and Extra updates by itself.</li>
+      </ul>
+    </div>
     <button class="link-btn" id="resetBtn" onclick="resetExtra()">Reset Extra to 0</button>
   </div>
 </div>
@@ -187,6 +203,32 @@
     <div class="row">
       <button class="btn ghost" onclick="closeAll()">Cancel</button>
       <button class="btn main" onclick="saveAdd()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- add money to Extra -->
+<div class="sheet-bg" id="xBg" onclick="if(event.target===this)closeAll()">
+  <div class="sheet">
+    <h2>Add money to Extra</h2>
+    <p>Got money from somewhere else? Sold something, a gift, a side job: add it here and it goes straight into your Extra.</p>
+    <input type="text" id="xAmount" inputmode="decimal" placeholder="Amount ₾">
+    <input type="text" id="xNote" maxlength="80" placeholder="What was it? (optional) e.g. Sold a jacket">
+    <div class="row">
+      <button class="btn ghost" onclick="closeAll()">Cancel</button>
+      <button class="btn main" onclick="saveExtra()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- remove money you added -->
+<div class="sheet-bg" id="xDelBg" onclick="if(event.target===this)closeAll()">
+  <div class="sheet">
+    <h2 id="xDelTitle">Added money</h2>
+    <p id="xDelSub"></p>
+    <div class="row">
+      <button class="btn ghost" onclick="closeAll()">Keep</button>
+      <button class="btn del" onclick="removeExtra()">Remove</button>
     </div>
   </div>
 </div>
@@ -308,6 +350,7 @@ function render(){
   const isExtra = period === 'extra';
   document.getElementById('mainView').style.display = isExtra ? 'none' : '';
   document.getElementById('extraView').style.display = isExtra ? '' : 'none';
+  document.querySelector('.fab').style.display = isExtra ? 'none' : '';
   if (isExtra) { renderExtra(); return; }
   const from = startOf(period);
   const items = (DATA.tx || []).filter(t => t.ts >= from).sort((a,b) => b.ts - a.ts);
@@ -401,7 +444,9 @@ function extraCalc(){
     }
   }
   const limT = limitOn(today) || (start ? 0 : DATA.limit);
-  return { bal: bal, days: days, start: start, today: limT > 0 ? { lim: limT, sp: spent[today] || 0 } : null };
+  const adds = (DATA.extras || []).filter(e => !start || e.day >= start);
+  adds.forEach(e => { bal += Number(e.amount) || 0; });
+  return { bal: bal, days: days, adds: adds, start: start, today: limT > 0 ? { lim: limT, sp: spent[today] || 0 } : null };
 }
 const signed = v => (v > 0.004 ? '+' : v < -0.004 ? '−' : '') + fmt(Math.abs(v));
 const niceDay = k => new Date(k + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
@@ -410,8 +455,8 @@ function renderExtra(){
   const tot = document.getElementById('extraTotal');
   tot.innerHTML = signed(x.bal) + '<small>₾</small>';
   tot.className = 'total' + (x.bal < -0.004 ? ' neg' : x.bal > 0.004 ? ' pos' : '');
-  document.getElementById('extraSub').textContent = (x.today || x.days.length)
-    ? 'Leftover from your daily limit since ' + niceDay(x.start || todayKey())
+  document.getElementById('extraSub').textContent = (x.today || x.days.length || x.adds.length)
+    ? 'Leftover from your daily limit and money you added, since ' + niceDay(x.start || todayKey())
     : 'Set a daily limit in ⚙︎ to start collecting Extra';
   const tc = document.getElementById('extraToday');
   if (x.today) {
@@ -419,13 +464,38 @@ function renderExtra(){
     tc.innerHTML = `<div class="xtoday">Limit ${fmt(x.today.lim)} ₾ · spent ${fmt(x.today.sp)} ₾</div>
       <div class="xtoday"><b class="${left >= 0 ? 'pos' : 'neg'}">${signed(left)} ₾</b> ${left >= 0 ? 'goes to' : 'comes off'} Extra when today ends</div>`;
   } else tc.innerHTML = '<div class="empty">No daily limit set</div>';
-  document.getElementById('extraList').innerHTML = x.days.length ? x.days.slice().reverse().map(r => `
+  const rows = x.days.map(r => ({ k: r.k, o: 0, ts: 0, html: `
     <div class="xrow"><div><div class="d">${dayLabel(new Date(r.k + 'T12:00:00').getTime())}</div>
       <div class="s">spent ${fmt(r.sp)} of ${fmt(r.lim)} ₾</div></div>
-      <div class="v ${r.diff >= 0 ? 'pos' : 'neg'}">${signed(r.diff)} ₾</div></div>`).join('')
-    : '<div class="empty">Your first day is added after today ends</div>';
+      <div class="v ${r.diff >= 0 ? 'pos' : 'neg'}">${signed(r.diff)} ₾</div></div>` }))
+    .concat(x.adds.map(e => ({ k: e.day, o: 1, ts: e.ts, html: `
+    <div class="xrow add" data-x="${esc(e.id)}"><div><div class="d">💰 ${esc(e.note || 'Added money')}</div>
+      <div class="s">Added by you · ${dayLabel(new Date(e.day + 'T12:00:00').getTime())}</div></div>
+      <div class="v pos">+${fmt(e.amount)} ₾</div></div>` })))
+    .sort((a, b) => (a.k < b.k ? 1 : a.k > b.k ? -1 : (b.o - a.o) || (b.ts - a.ts)));
+  const xl = document.getElementById('extraList');
+  xl.innerHTML = rows.length ? rows.map(r => r.html).join('') : '<div class="empty">Your first day is added after today ends</div>';
+  xl.querySelectorAll('.xrow.add').forEach(el => el.onclick = () => openRemoveExtra(el.dataset.x));
   resetArm(false);
 }
+function openAddExtra(){
+  document.getElementById('xAmount').value = ''; document.getElementById('xNote').value = '';
+  document.getElementById('xBg').classList.add('show');
+  setTimeout(() => document.getElementById('xAmount').focus(), 50);
+}
+function saveExtra(){
+  const a = document.getElementById('xAmount').value.trim();
+  if (!(parseFloat(a.replace(',', '.')) > 0)) return toast('Enter an amount', true);
+  act(call('addExtra', a, document.getElementById('xNote').value.trim(), todayKey()), 'Added to Extra');
+}
+let removing = null;
+function openRemoveExtra(id){
+  removing = (DATA.extras || []).find(e => e.id === id); if (!removing) return;
+  document.getElementById('xDelTitle').textContent = removing.note || 'Added money';
+  document.getElementById('xDelSub').textContent = '+' + fmt(removing.amount) + ' ₾, added ' + dayLabel(new Date(removing.day + 'T12:00:00').getTime()).toLowerCase() + '. Remove it from Extra?';
+  document.getElementById('xDelBg').classList.add('show');
+}
+function removeExtra(){ if (removing) act(call('deleteExtra', removing.id), 'Removed from Extra'); }
 let resetArmed = false;
 function resetArm(on){
   resetArmed = on;
@@ -500,13 +570,16 @@ function demo(fn, ...a){
       [D/H+3,15.55,"McDonald's",'Food & drinks'],[D/H+6,89,'ZARA','Shopping'],[2*D/H+1,32.4,'NIKORA','Groceries'],
       [2*D/H+5,9.99,'SPOTIFY','Subscriptions'],[3*D/H+2,7.8,'BOLT','Transport'],[4*D/H,45,'MAGTI','Bills']];
     DEMO = {tx: s.map((x,i) => ({id:'d'+i, ts: now - x[0]*H, amount:x[1], currency:'GEL', merchant:x[2], category:x[3]})),
-      categories:Object.keys(COLORS), limit:30, extraStart: dayKey(now - 5*D), limits: [[dayKey(now - 5*D), 30]]};
+      categories:Object.keys(COLORS), limit:30, extraStart: dayKey(now - 5*D), limits: [[dayKey(now - 5*D), 30]],
+      extras: [{id:'x1', ts: now - 2*D, day: dayKey(now - 2*D), amount: 25, note: 'Sold a jacket'}]};
   }
   if (fn==='setCategory'){ const t = DEMO.tx.find(x => x.id===a[0]); if (t){ if (a[2]) DEMO.tx.forEach(x => { if (x.merchant===t.merchant) x.category = a[1]; }); else t.category = a[1]; } }
   if (fn==='deleteTx') DEMO.tx = DEMO.tx.filter(x => x.id!==a[0]);
   if (fn==='addTx') DEMO.tx.push({id:'d'+Math.random(), ts:Date.now(), amount:parseFloat(String(a[0]).replace(',','.')), currency:'GEL', merchant:a[1], category:a[2]});
   if (fn==='setLimit'){ DEMO.limit = a[0]; DEMO.limits = DEMO.limits.filter(h => h[0] !== a[1]).concat([[a[1], a[0]]]); }
   if (fn==='resetExtra') DEMO.extraStart = a[0];
+  if (fn==='addExtra') DEMO.extras.push({id:'x'+Math.random(), ts: Date.now(), day: a[2] || dayKey(Date.now()), amount: parseFloat(String(a[0]).replace(',','.')), note: a[1]});
+  if (fn==='deleteExtra') DEMO.extras = DEMO.extras.filter(e => e.id !== a[0]);
   return JSON.parse(JSON.stringify(DEMO));
 }
 

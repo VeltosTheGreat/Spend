@@ -25,6 +25,7 @@
     -webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
   .wrap{max-width:480px;width:100%;margin:0 auto;padding:calc(env(safe-area-inset-top) + 18px) 18px 110px}
   header{display:flex;justify-content:space-between;align-items:center}
+  header > div{display:flex;gap:8px;align-items:center}
   .brand{font-weight:800;letter-spacing:.18em;font-size:13px}
   .icon-btn{background:var(--card);border:1px solid var(--line);color:var(--text);
     width:38px;height:38px;border-radius:12px;font-size:17px;cursor:pointer}
@@ -52,6 +53,29 @@
   .cat .track{grid-column:2/4;height:5px;background:var(--line);border-radius:5px;margin-top:-4px;overflow:hidden}
   .cat .track i{display:block;height:100%;border-radius:5px}
   .day{color:var(--dim);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin:16px 0 4px}
+  .day[data-day]{cursor:pointer}
+  .day[data-day]::after{content:' ›';opacity:.6}
+  /* one day's page */
+  .daybar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 16px}
+  .daybar .dtitle{flex:1;text-align:center;font-weight:700;font-size:16px}
+  .daybar .icon-btn:disabled{opacity:.3}
+  .icon-btn svg{width:18px;height:18px;display:block;margin:auto}
+  /* calendar */
+  .calhead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .calhead h2{margin:0;font-size:18px;text-align:center;flex:1}
+  .calhead .icon-btn:disabled{opacity:.3}
+  .calsum{color:var(--dim);font-size:13.5px;text-align:center;margin:4px 0 12px}
+  .calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+  .cw{color:var(--dim);font-size:11.5px;font-weight:600;text-align:center;padding:2px 0 4px}
+  .cd{aspect-ratio:1/1.08;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:10px;padding:4px 2px;
+    display:flex;flex-direction:column;align-items:center;justify-content:space-between;cursor:pointer;font:inherit;min-width:0}
+  .cd b{font-size:13px;font-weight:600}
+  .cd span{font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;min-height:13px}
+  .cd.hi{color:#0d0d0e}
+  .cd.today{border-color:var(--text)}
+  .cd.sel{outline:2px solid var(--text);outline-offset:1px}
+  .cd.off{opacity:.25;cursor:default}
+  .calnote{color:var(--dim);font-size:13px;text-align:center;margin:12px 0 0}
   .tx{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);cursor:pointer}
   .tx:last-child{border-bottom:0}
   .tx .badge{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-weight:800;font-size:14px;color:#0d0d0e;flex:none}
@@ -117,6 +141,7 @@
   <header>
     <div class="brand">SPEND</div>
     <div>
+      <button class="icon-btn" onclick="openCal()" aria-label="Pick a day"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button>
       <button class="icon-btn" id="refreshBtn" onclick="load()" aria-label="Refresh">↻</button>
       <button class="icon-btn" onclick="openSettings()" aria-label="Settings">⚙︎</button>
     </div>
@@ -130,6 +155,12 @@
   </div>
 
   <div id="mainView">
+  <div class="daybar" id="dayBar" style="display:none">
+    <button class="icon-btn" onclick="exitDay()" aria-label="Back">←</button>
+    <div class="dtitle" id="dayTitle"></div>
+    <button class="icon-btn" id="dPrev" onclick="moveDay(-1)" aria-label="Previous day">‹</button>
+    <button class="icon-btn" id="dNext" onclick="moveDay(1)" aria-label="Next day">›</button>
+  </div>
   <div class="label" id="periodLabel">Spent today</div>
   <div class="total" id="total">0.00<small>₾</small></div>
   <div id="limitBox" style="display:none"><div class="bar" id="bar"><i id="barFill" style="width:0"></i></div></div>
@@ -204,6 +235,20 @@
       <button class="btn ghost" onclick="closeAll()">Cancel</button>
       <button class="btn main" onclick="saveAdd()">Add</button>
     </div>
+  </div>
+</div>
+
+<!-- calendar: pick a day -->
+<div class="sheet-bg" id="calBg" onclick="if(event.target===this)closeAll()">
+  <div class="sheet">
+    <div class="calhead">
+      <button class="icon-btn" id="calPrev" onclick="calMove(-1)" aria-label="Previous month">‹</button>
+      <h2 id="calTitle"></h2>
+      <button class="icon-btn" id="calNext" onclick="calMove(1)" aria-label="Next month">›</button>
+    </div>
+    <div class="calsum" id="calSum"></div>
+    <div class="calgrid" id="calGrid"></div>
+    <p class="calnote">Tap a day to see what you spent and on what.</p>
   </div>
 </div>
 
@@ -352,28 +397,45 @@ function render(){
   document.getElementById('extraView').style.display = isExtra ? '' : 'none';
   document.querySelector('.fab').style.display = isExtra ? 'none' : '';
   if (isExtra) { renderExtra(); return; }
-  const from = startOf(period);
-  const items = (DATA.tx || []).filter(t => t.ts >= from).sort((a,b) => b.ts - a.ts);
+  const isDate = period === 'date';
+  const oneDay = period === 'day' || isDate;
+  document.getElementById('dayBar').style.display = isDate ? '' : 'none';
+  let from = startOf(period), to = Infinity;
+  if (isDate) {
+    const d = new Date(selDay + 'T00:00:00'); from = d.getTime(); d.setDate(d.getDate() + 1); to = d.getTime();
+    document.getElementById('dayTitle').textContent = longDay(selDay);
+    document.getElementById('dPrev').disabled = selDay <= firstDataDay();
+    document.getElementById('dNext').disabled = selDay >= todayKey();
+    document.querySelector('.fab').style.display = selDay === todayKey() ? '' : 'none';   // + adds to today only
+  }
+  const items = (DATA.tx || []).filter(t => t.ts >= from && t.ts < to).sort((a,b) => b.ts - a.ts);
   const gel = items.filter(t => t.currency==='GEL');
   const total = gel.reduce((s,t) => s + t.amount, 0);
   const foreign = items.filter(t => t.currency!=='GEL');
 
-  document.getElementById('periodLabel').textContent =
-    period==='day' ? 'Spent today' : period==='week' ? 'Spent this week' : 'Spent this month';
+  document.getElementById('periodLabel').textContent = isDate
+    ? (selDay === todayKey() ? 'Spent today' : dayLabel(new Date(selDay + 'T12:00:00').getTime()) === 'Yesterday' ? 'Spent yesterday' : 'Spent on ' + longDay(selDay))
+    : period==='day' ? 'Spent today' : period==='week' ? 'Spent this week' : 'Spent this month';
   document.getElementById('total').innerHTML = fmt(total) + '<small>₾</small>';
 
   const lb = document.getElementById('limitBox'), sub = document.getElementById('sub');
   let subTxt = '';
-  if (period==='day' && DATA.limit > 0){
+  const past = isDate && selDay < todayKey();
+  const lim = period === 'day' || (isDate && !past) ? DATA.limit : isDate ? limitOnDay(selDay) : 0;
+  if (oneDay && lim > 0){
     lb.style.display = '';
-    const pct = Math.min(100, total / DATA.limit * 100);
+    const pct = Math.min(100, total / lim * 100);
     document.getElementById('barFill').style.width = pct + '%';
-    document.getElementById('bar').classList.toggle('over', total > DATA.limit);
-    const left = DATA.limit - total;
-    subTxt = left >= 0 ? fmt(left) + ' ₾ left of ' + fmt(DATA.limit) + ' ₾' : fmt(-left) + ' ₾ over your ' + fmt(DATA.limit) + ' ₾ limit';
+    document.getElementById('bar').classList.toggle('over', total > lim);
+    const left = lim - total;
+    subTxt = past
+      ? (left >= 0 ? fmt(left) + ' ₾ under' : fmt(-left) + ' ₾ over') + ' your ' + fmt(lim) + ' ₾ limit'
+        + (DATA.extraStart && selDay >= DATA.extraStart ? ' · ' + signed(left) + ' ₾ Extra' : '')
+      : left >= 0 ? fmt(left) + ' ₾ left of ' + fmt(lim) + ' ₾' : fmt(-left) + ' ₾ over your ' + fmt(lim) + ' ₾ limit';
+    if (items.length) subTxt += ' · ' + items.length + ' purchase' + (items.length > 1 ? 's' : '');
   } else {
     lb.style.display = 'none';
-    if (period!=='day'){
+    if (!oneDay){
       const days = Math.max(1, Math.ceil((Date.now() - from) / 864e5));
       subTxt = 'About ' + fmt(total/days) + ' ₾ a day · ' + items.length + ' purchases';
     } else subTxt = items.length ? items.length + ' purchase' + (items.length>1?'s':'') : '';
@@ -395,10 +457,10 @@ function render(){
     <div class="cat"><span class="ico">${icon(c) || `<span class="dot" style="display:inline-block;background:${color(c)}"></span>`}</span>
       <span class="name">${esc(c)}</span><span class="val">${fmt(v)} ₾<span class="pct">${Math.round(v/sum*100)}%</span></span>
       <span class="track"><i style="width:${v/max*100}%;background:${color(c)}"></i></span></div>`).join('')
-    : '<div class="empty">Nothing spent yet 👌</div>';
+    : `<div class="empty">${isDate && selDay !== todayKey() ? 'Nothing spent this day 👌' : 'Nothing spent yet 👌'}</div>`;
 
   const topCard = document.getElementById('topCard');
-  if (period!=='day' && gel.length){
+  if (!oneDay && gel.length){
     const byM = {};
     gel.forEach(t => { const k = t.merchant; byM[k] = byM[k] || {v:0,n:0,c:t.category}; byM[k].v += t.amount; byM[k].n++; });
     const tops = Object.entries(byM).sort((a,b) => b[1].v - a[1].v).slice(0,3);
@@ -412,15 +474,16 @@ function render(){
   let html = '', lastDay = '';
   items.forEach(t => {
     const dl = dayLabel(t.ts);
-    if (period!=='day' && dl !== lastDay){ html += `<div class="day">${dl}</div>`; lastDay = dl; }
+    if (!oneDay && dl !== lastDay){ html += `<div class="day" data-day="${dayKey(t.ts)}">${dl}</div>`; lastDay = dl; }
     html += `<div class="tx" data-id="${esc(t.id)}">
       ${badge(t.category, t.merchant)}
       <div class="mid"><div class="m">${esc(t.merchant)}</div><div class="c">${esc(t.category)} · ${timeOf(t.ts)}</div></div>
       <div class="a">${fmt(t.amount)} ${curSym(t.currency)}</div></div>`;
   });
   const list = document.getElementById('list');
-  list.innerHTML = html || '<div class="empty">No purchases yet</div>';
+  list.innerHTML = html || `<div class="empty">${isDate && selDay !== todayKey() ? 'No purchases this day' : 'No purchases yet'}</div>`;
   list.querySelectorAll('.tx[data-id]').forEach(el => el.onclick = () => openEdit(el.dataset.id));
+  list.querySelectorAll('.day[data-day]').forEach(el => el.onclick = () => openDay(el.dataset.day));
 }
 
 /* ---- Extra: every finished day adds (limit − spent); over the limit it takes off. Can go below 0. ---- */
@@ -507,6 +570,70 @@ function resetExtra(){
   if (!resetArmed) { resetArm(true); setTimeout(() => resetArm(false), 4000); return; }
   resetArm(false);
   act(call('resetExtra', todayKey()), 'Extra reset to 0');
+}
+
+/* ---- one day's page + calendar ---- */
+let selDay = null, prevPeriod = 'day', calMonth = null;
+const pad2 = n => String(n).padStart(2, '0');
+const longDay = k => new Date(k + 'T12:00:00').toLocaleDateString('en-GB',
+  Object.assign({ weekday: 'short', day: 'numeric', month: 'short' }, k.slice(0, 4) !== todayKey().slice(0, 4) ? { year: 'numeric' } : {}));
+function limitOnDay(k){
+  let hist = (DATA.limits || []).slice().sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  if (!hist.length && DATA.limit > 0 && DATA.extraStart) hist = [[DATA.extraStart, DATA.limit]];
+  let l = 0; hist.forEach(h => { if (h[0] <= k) l = Number(h[1]) || 0; }); return l;
+}
+function spentByDay(){
+  const m = {};
+  (DATA.tx || []).forEach(t => { if (t.currency === 'GEL') { const k = dayKey(t.ts); m[k] = (m[k] || 0) + t.amount; } });
+  return m;
+}
+// the first day the app has anything for you (you can't pick days before you started)
+function firstDataDay(){
+  let k = todayKey();
+  (DATA.tx || []).forEach(t => { const d = dayKey(t.ts); if (d < k) k = d; });
+  if (DATA.extraStart && DATA.extraStart < k) k = DATA.extraStart;
+  return k;
+}
+function setTab(p){ document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.p === p)); }
+function openDay(k){
+  if (period !== 'date') prevPeriod = period;
+  selDay = k; period = 'date'; setTab(null); closeAll(); render();
+  document.getElementById('app').scrollTop = 0;
+}
+function exitDay(){ period = prevPeriod || 'day'; setTab(period); render(); }
+function moveDay(n){
+  const d = new Date(selDay + 'T12:00:00'); d.setDate(d.getDate() + n);
+  const k = dayKey(d.getTime());
+  if (k >= firstDataDay() && k <= todayKey()) openDay(k);
+}
+function openCal(){ calMonth = (selDay || todayKey()).slice(0, 7); drawCal(); document.getElementById('calBg').classList.add('show'); }
+function calMove(n){
+  const [y, m] = calMonth.split('-').map(Number);
+  calMonth = dayKey(new Date(y, m - 1 + n, 1).getTime()).slice(0, 7);
+  drawCal();
+}
+function drawCal(){
+  const [y, m] = calMonth.split('-').map(Number);
+  const first = new Date(y, m - 1, 1), n = new Date(y, m, 0).getDate();
+  const lead = (first.getDay() + 6) % 7;                              // weeks start on Monday
+  const spent = spentByDay(), today = todayKey(), start = firstDataDay();
+  let max = 0, monthSum = 0;
+  for (let d = 1; d <= n; d++){ const v = spent[`${y}-${pad2(m)}-${pad2(d)}`] || 0; max = Math.max(max, v); monthSum += v; }
+  let html = ['M','T','W','T','F','S','S'].map(w => `<div class="cw">${w}</div>`).join('') + '<div></div>'.repeat(lead);
+  for (let d = 1; d <= n; d++){
+    const k = `${y}-${pad2(m)}-${pad2(d)}`, v = spent[k] || 0, off = k > today || k < start;
+    const a = v > 0 && max > 0 ? 0.2 + 0.65 * (v / max) : 0;          // more spent = stronger colour
+    const cls = 'cd' + (off ? ' off' : '') + (k === today ? ' today' : '') + (k === selDay && period === 'date' ? ' sel' : '') + (a > 0.5 ? ' hi' : '');
+    const amt = v > 0 ? (v < 10 ? v.toFixed(1).replace(/\.0$/, '') : String(Math.round(v))) : '';
+    html += `<button class="${cls}" data-k="${k}"${off ? ' disabled' : ''}${a ? ` style="background:rgba(212,255,58,${a.toFixed(2)})"` : ''} aria-label="${k}${v ? ', ' + fmt(v) + ' lari' : ''}"><b>${d}</b><span>${amt}</span></button>`;
+  }
+  const g = document.getElementById('calGrid');
+  g.innerHTML = html;
+  g.querySelectorAll('.cd:not(.off)').forEach(b => b.onclick = () => openDay(b.dataset.k));
+  document.getElementById('calTitle').textContent = first.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  document.getElementById('calSum').textContent = monthSum ? 'Spent this month: ' + fmt(monthSum) + ' ₾' : 'Nothing spent this month';
+  document.getElementById('calPrev').disabled = calMonth <= start.slice(0, 7);
+  document.getElementById('calNext').disabled = calMonth >= today.slice(0, 7);
 }
 
 /* ---- tabs ---- */
